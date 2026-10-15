@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard MPB Enel 2026 - 2027</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js Core & Plugins -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <!-- PapaParse para procesar CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
+        .bg-enel-green { background-color: #1e5631; }
+        .border-enel-green { border-color: #1e5631; }
+        .text-enel-green { color: #1e5631; }
+        .dropdown-menu { max-height: 220px; overflow-y: auto; }
+        .dropdown-menu::-webkit-scrollbar { width: 6px; }
+        .dropdown-menu::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="p-4 md:p-8 text-slate-800" onclick="closeAllDropdowns(event)">
+
+    <!-- Header Normal -->
+    <header class="mb-4 bg-white p-6 rounded-2xl shadow-sm border-l-8 border-enel-green border-y border-r border-slate-100">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+            
+            <!-- Extremo Izquierdo: Logo ENEL -->
+            <div class="flex items-center shrink-0">
+                <img src="https://lh3.googleusercontent.com/d/1tPTvJTR5TraxOdTHrt8dys0zV4aSnPC7" alt="Enel Logo" class="h-10 md:h-12 object-contain transition-transform hover:scale-105">
+            </div>
+
+            <!-- Centro: Título del Dashboard y Botones de Acción -->
+            <div class="text-center flex flex-col items-center">
+                <div class="flex items-center justify-center gap-3">
+                    <h1 class="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight">Dashboard MPB</h1>
+                    <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">2026 - 2027</span>
+                </div>
+                <p class="text-slate-500 text-xs md:text-sm mt-1">Monitoreo y trazabilidad de Mantenimientos Preventivos</p>
+                <div class="mt-3 flex flex-wrap items-center justify-center gap-3">
+                    <!-- Botón para Refrescar Data -->
+                    <button id="btnRefreshData" onclick="refreshDataFromSheets()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95">
+                        <i id="refreshIcon" class="fa-solid fa-arrows-rotate"></i> Actualizar Data
+                    </button>
+                    <!-- Botón para Resetear Filtros -->
+                    <button onclick="resetFilters()" class="bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 border border-slate-200 transition">
+                        <i class="fa-solid fa-filter-circle-xmark text-slate-500"></i> Resetear Filtros
+                    </button>
+                    <div class="bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold px-3.5 py-1.5 rounded-xl flex items-center gap-1.5">
+                        <i class="fa-solid fa-bolt text-emerald-600"></i> Registros: <span id="kpiTotalHeader" class="text-sm">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Extremo Derecho: Logo TIVIT -->
+            <div class="flex items-center shrink-0">
+                <img src="https://lh3.googleusercontent.com/d/1wPyTZo9Uuv8AyGsm0Zy0jpjxd7PPSoQq" alt="Tivit Logo" class="h-10 md:h-12 object-contain transition-transform hover:scale-105">
+            </div>
+
+        </div>
+    </header>
+
+    <!-- FILTROS MÚLTIPLES FIJOS -->
+    <div class="sticky top-0 z-50 bg-slate-50/95 backdrop-blur-md py-2 -mx-4 px-4 md:-mx-8 md:px-8 mb-6 shadow-sm border-b border-slate-200/50">
+        <section class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-filter text-enel-green"></i> Filtros Múltiples
+                </h2>
+                <button onclick="resetFilters()" class="text-xs text-emerald-700 font-bold hover:underline flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-rotate-left"></i> Limpiar Filtros
+                </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                <div class="relative dropdown-container">
+                    <label class="block text-[11px] font-medium text-slate-500 mb-1">Año Prog.</label>
+                    <button type="button" onclick="toggleDropdown(event, 'dropdownAnio')" class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl p-2 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <span id="labelAnio" class="truncate font-medium">Todos</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] ml-2"></i>
+                    </button>
+                    <div id="dropdownAnio" class="dropdown-menu hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2"></div>
+                </div>
+
+                <div class="relative dropdown-container">
+                    <label class="block text-[11px] font-medium text-slate-500 mb-1">Mes Prog.</label>
+                    <button type="button" onclick="toggleDropdown(event, 'dropdownMes')" class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl p-2 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <span id="labelMes" class="truncate font-medium">Todos</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] ml-2"></i>
+                    </button>
+                    <div id="dropdownMes" class="dropdown-menu hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2"></div>
+                </div>
+
+                <div class="relative dropdown-container">
+                    <label class="block text-[11px] font-medium text-slate-500 mb-1">Zona Geográfica</label>
+                    <button type="button" onclick="toggleDropdown(event, 'dropdownZona')" class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl p-2 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <span id="labelZona" class="truncate font-medium">Todas</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] ml-2"></i>
+                    </button>
+                    <div id="dropdownZona" class="dropdown-menu hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2"></div>
+                </div>
+
+                <div class="relative dropdown-container">
+                    <label class="block text-[11px] font-medium text-slate-500 mb-1">Tipo de Central</label>
+                    <button type="button" onclick="toggleDropdown(event, 'dropdownTipo')" class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl p-2 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <span id="labelTipo" class="truncate font-medium">Todos</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] ml-2"></i>
+                    </button>
+                    <div id="dropdownTipo" class="dropdown-menu hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2"></div>
+                </div>
+
+                <div class="relative dropdown-container">
+                    <label class="block text-[11px] font-medium text-slate-500 mb-1">Línea de Negocio</label>
+                    <button type="button" onclick="toggleDropdown(event, 'dropdownLinea')" class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl p-2 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <span id="labelLinea" class="truncate font-medium">Todas</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] ml-2"></i>
+                    </button>
+                    <div id="dropdownLinea" class="dropdown-menu hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2"></div>
+                </div>
+
+                <div class="relative dropdown-container">
+                    <label class="block text-[11px] font-medium text-slate-500 mb-1">Estado del MPB</label>
+                    <button type="button" onclick="toggleDropdown(event, 'dropdownEstado')" class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl p-2 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <span id="labelEstado" class="truncate font-medium">Todos</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] ml-2"></i>
+                    </button>
+                    <div id="dropdownEstado" class="dropdown-menu hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Indicador de Carga Inicial -->
+    <div id="loadingSpinner" class="flex flex-col items-center justify-center p-12 bg-white rounded-2xl shadow-sm border border-slate-100 mb-6">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-emerald-600 border-t-transparent"></div>
+        <p class="mt-4 text-sm font-semibold text-slate-600">Cargando datos desde Google Sheets...</p>
+    </div>
+
+    <!-- Alerta de Error -->
+    <div id="errorMessage" class="hidden p-4 bg-red-50 border border-red-200 text-red-800 text-sm rounded-xl mb-6">
+        <strong class="font-bold">Error de conexión:</strong>
+        <span id="errorText">No se pudieron recuperar los datos. Verifique que el enlace CSV publicado sea correcto.</span>
+    </div>
+
+    <!-- Contenido Principal -->
+    <div id="mainContent" class="hidden">
+        <!-- KPIs -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Centrales</p>
+                        <p class="text-3xl font-extrabold text-slate-800 mt-1" id="kpiTotal">0</p>
+                    </div>
+                    <div class="w-11 h-11 bg-emerald-100/80 rounded-2xl flex items-center justify-center text-enel-green text-lg">
+                        <i class="fa-solid fa-industry"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex justify-between text-xs text-slate-600 mb-1 font-medium">
+                        <span id="kpiTotalSub">Avance: 0 / 0</span>
+                        <span class="font-bold text-enel-green" id="kpiTotalPct">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div id="kpiTotalBar" class="bg-emerald-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Programa MPB 2026</p>
+                        <p class="text-3xl font-extrabold text-slate-800 mt-1" id="kpi2026">0</p>
+                    </div>
+                    <div class="w-11 h-11 bg-blue-100/80 rounded-2xl flex items-center justify-center text-blue-600 text-lg">
+                        <i class="fa-regular fa-calendar-check"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex justify-between text-xs text-slate-600 mb-1 font-medium">
+                        <span id="kpi2026Sub">Avance: 0 / 0</span>
+                        <span class="font-bold text-blue-600" id="kpi2026Pct">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div id="kpi2026Bar" class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Programa MPB 2027</p>
+                        <p class="text-3xl font-extrabold text-slate-800 mt-1" id="kpi2027">0</p>
+                    </div>
+                    <div class="w-11 h-11 bg-amber-100/80 rounded-2xl flex items-center justify-center text-amber-600 text-lg">
+                        <i class="fa-regular fa-hourglass-half"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex justify-between text-xs text-slate-600 mb-1 font-medium">
+                        <span id="kpi2027Sub">Avance: 0 / 0</span>
+                        <span class="font-bold text-amber-600" id="kpi2027Pct">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div id="kpi2027Bar" class="bg-amber-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tabla Comparativa -->
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-8">
+            <h2 class="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-calendar-days text-amber-600"></i>
+                Trazabilidad Temporal: Origen vs Reprogramado vs Real
+            </h2>
+            <p class="text-xs text-slate-500 mb-4">Evolución mensual de mantenimientos diferidos y su ejecución efectiva.</p>
+            
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-center text-xs border-collapse" id="reprogCompareTable">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase">
+                            <th class="py-3 px-4 text-left bg-slate-200">Métrica / Mes</th>
+                            <th class="py-3 px-2">Mayo 26</th>
+                            <th class="py-3 px-2">Junio 26</th>
+                            <th class="py-3 px-2">Julio 26</th>
+                            <th class="py-3 px-2">Agosto 26</th>
+                            <th class="py-3 px-2">Sept 26</th>
+                            <th class="py-3 px-2">Oct 26</th>
+                            <th class="py-3 px-2">Nov 26</th>
+                            <th class="py-3 px-2">Dic 26</th>
+                            <th class="py-3 px-3 bg-amber-100/70 font-extrabold text-amber-900">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 font-semibold">
+                        <tr class="hover:bg-red-50/50">
+                            <td class="py-3 px-4 text-left font-bold text-red-800 bg-red-50/80 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+                                No Ejecutadas Fecha Orig.
+                            </td>
+                            <td id="cell-noejec-0" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-1" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-2" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-3" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-4" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-5" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-6" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-7" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-8" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-9" class="py-3 px-2">0</td>
+                            <td id="cell-noejec-total" class="py-3 px-3 font-black text-red-900 bg-red-100/60">0</td>
+                        </tr>
+                        <tr class="hover:bg-amber-50/50">
+                            <td class="py-3 px-4 text-left font-bold text-amber-800 bg-amber-50/80 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                                Centrales Reprogramadas
+                            </td>
+                            <td id="cell-rep-0" class="py-3 px-2">0</td>
+                            <td id="cell-rep-1" class="py-3 px-2">0</td>
+                            <td id="cell-rep-2" class="py-3 px-2">0</td>
+                            <td id="cell-rep-3" class="py-3 px-2">0</td>
+                            <td id="cell-rep-4" class="py-3 px-2">0</td>
+                            <td id="cell-rep-5" class="py-3 px-2">0</td>
+                            <td id="cell-rep-6" class="py-3 px-2">0</td>
+                            <td id="cell-rep-7" class="py-3 px-2">0</td>
+                            <td id="cell-rep-8" class="py-3 px-2">0</td>
+                            <td id="cell-rep-9" class="py-3 px-2">0</td>
+                            <td id="cell-rep-total" class="py-3 px-3 font-black text-amber-900 bg-amber-100/60">0</td>
+                        </tr>
+                        <tr class="hover:bg-emerald-50/50">
+                            <td class="py-3 px-4 text-left font-bold text-emerald-800 bg-emerald-50/80 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span>
+                                Reprogramadas Ejecutadas
+                            </td>
+                            <td id="cell-exe-0" class="py-3 px-2">0</td>
+                            <td id="cell-exe-1" class="py-3 px-2">0</td>
+                            <td id="cell-exe-2" class="py-3 px-2">0</td>
+                            <td id="cell-exe-3" class="py-3 px-2">0</td>
+                            <td id="cell-exe-4" class="py-3 px-2">0</td>
+                            <td id="cell-exe-5" class="py-3 px-2">0</td>
+                            <td id="cell-exe-6" class="py-3 px-2">0</td>
+                            <td id="cell-exe-7" class="py-3 px-2">0</td>
+                            <td id="cell-exe-8" class="py-3 px-2">0</td>
+                            <td id="cell-exe-9" class="py-3 px-2">0</td>
+                            <td id="cell-exe-total" class="py-3 px-3 font-black text-emerald-900 bg-emerald-100/60">0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Gráficos -->
+        <div class="flex flex-col gap-6 mb-8">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 w-full">
+                <h2 class="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-column text-enel-green"></i>
+                    Avance Mensual: Programado vs Real
+                </h2>
+                <div class="relative h-[380px] w-full mt-4">
+                    <canvas id="chartProgVsEjec"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 w-full">
+                <h2 class="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-bar text-enel-green"></i>
+                    Distribución por Estado del MPB
+                </h2>
+                <div class="relative h-[380px] w-full mt-4">
+                    <canvas id="chartEstados"></canvas>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+                <!-- TARJETA: Tipo de Central x Línea de Negocio -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-bar text-enel-green"></i>
+                            Tipo de Central por Línea de Negocio
+                        </h2>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[11px] font-semibold text-slate-400 whitespace-nowrap">Vista:</label>
+                            <select id="selectChartType" onchange="renderChartTipo()" class="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold">
+                                <option value="STACKED">Barras Apiladas (Por Línea)</option>
+                                <option value="DOUGHNUT">Dona General</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="relative h-[350px] w-full mt-2">
+                        <canvas id="chartTipo"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h2 class="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
+                        <i class="fa-solid fa-earth-americas text-enel-green"></i>
+                        Volumen por Zona Geográfica
+                    </h2>
+                    <div class="relative h-[350px] w-full mt-4">
+                        <canvas id="chartZona"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla Detallada -->
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-enel-green"></i>
+                        Listado Detallado de Centrales
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Centrales sujetas a mantención según filtro seleccionado</p>
+                </div>
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <div class="relative w-full sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+                        <input type="text" id="searchInput" onkeyup="filterTableText()" placeholder="Buscar central..." class="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                    <button onclick="exportToCSV()" class="bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 whitespace-nowrap">
+                        <i class="fa-solid fa-file-excel"></i> Exportar
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-100">
+                <table class="w-full text-left text-xs" id="mainTable">
+                    <thead class="bg-enel-green text-white uppercase text-[11px] font-semibold tracking-wider">
+                        <tr>
+                            <th class="py-3 px-4">Central</th>
+                            <th class="py-3 px-4">Tipo</th>
+                            <th class="py-3 px-4">Zona</th>
+                            <th class="py-3 px-4">Línea Negocio</th>
+                            <th class="py-3 px-4">Estado MPB</th>
+                            <th class="py-3 px-4 text-center">Fecha Prog Orig</th>
+                            <th class="py-3 px-4 text-center">Fecha Reprog</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-medium" id="tableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- Script Cliente -->
+    <script>
+        if (typeof ChartDataLabels !== 'undefined') {
+            Chart.register(ChartDataLabels);
+        }
+
+        // ==========================================
+        // REEMPLAZA ESTA URL CON TU ENLACE CSV PUBLICADO EN GOOGLE SHEETS
+        // ==========================================
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQzeY4EMqH25VhFG_edLl8RIwQY_ZM_IbA2lOsvBa_zqUQV7q3xKzCVzs6GBGQ3tLCaiaw4R138wryy/pub?gid=0&single=true&output=csv';
+
+        let rawData = [];
+        let filteredData = [];
+
+        let chartProgVsEjec = null;
+        let chartEstados = null;
+        let chartTipo = null;
+        let chartZona = null;
+
+        const mesesOrden = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02'];
+        const mesesNombres = ['May 26', 'Jun 26', 'Jul 26', 'Ago 26', 'Sep 26', 'Oct 26', 'Nov 26', 'Dic 26', 'Ene 27', 'Feb 27'];
+
+        const datalabelsCommon = {
+            anchor: 'end',
+            align: 'top',
+            font: { weight: 'bold', size: 10 },
+            color: '#475569',
+            formatter: (v) => v > 0 ? v : ''
+        };
+
+        function normalizeTipo(tipo) {
+            if (!tipo) return 'Sin Tipo';
+            let t = tipo.trim();
+            if (t.toLowerCase() === 'eolico') return 'Eólico';
+            return t;
+        }
+
+        function formatMonthName(ym) {
+            if (!ym || ym.length < 7) return ym;
+            const parts = ym.split('-');
+            const year = parts[0];
+            const monthIdx = parseInt(parts[1], 10) - 1;
+            const monthNames = [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+            ];
+            if (monthIdx >= 0 && monthIdx < 12) {
+                return `${monthNames[monthIdx]} ${year}`;
+            }
+            return ym;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchDataFromSheets();
+        });
+
+        function fetchDataFromSheets(isRefresh = false) {
+            const icon = document.getElementById('refreshIcon');
+            if (isRefresh && icon) icon.classList.add('fa-spin');
+
+            Papa.parse(CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    rawData = results.data.map(row => {
+                        const keys = Object.keys(row);
+                        return {
+                            central: row[keys[0]] || '',
+                            tipoCentral: row[keys[1]] || '',
+                            zona: row[keys[2]] || '',
+                            lineaNegocio: row[keys[3]] || '',
+                            estadoMPB: row[keys[4]] || '',
+                            mesProg: row[keys[5]] || '',
+                            fechaProgOrig: row[keys[6]] || '',
+                            fechaReprogramada: row[keys[7]] || '',
+                            mesEjecutado: row[keys[8]] || '',
+                            levantamiento: (row[keys[9]] || '').toString().toUpperCase() === 'TRUE'
+                        };
+                    }).filter(d => d.central && d.central.trim() !== '');
+
+                    document.getElementById('loadingSpinner').classList.add('hidden');
+                    document.getElementById('errorMessage').classList.add('hidden');
+                    document.getElementById('mainContent').classList.remove('hidden');
+
+                    populateFilterDropdowns();
+                    applyFilters();
+
+                    if (isRefresh && icon) icon.classList.remove('fa-spin');
+                },
+                error: function(err) {
+                    console.error("Error cargando el CSV:", err);
+                    document.getElementById('loadingSpinner').classList.add('hidden');
+                    document.getElementById('errorMessage').classList.remove('hidden');
+                    if (isRefresh && icon) icon.classList.remove('fa-spin');
+                }
+            });
+        }
+
+        function refreshDataFromSheets() {
+            fetchDataFromSheets(true);
+        }
+
+        function populateFilterDropdowns() {
+            const anios = [...new Set(rawData.map(d => d.mesProg ? d.mesProg.substring(0, 4) : null).filter(Boolean))].sort();
+            const meses = [...new Set(rawData.map(d => d.mesProg).filter(Boolean))].sort();
+            const zonas = [...new Set(rawData.map(d => d.zona).filter(Boolean))].sort();
+            const tipos = [...new Set(rawData.map(d => normalizeTipo(d.tipoCentral)).filter(Boolean))].sort();
+            const lineas = [...new Set(rawData.map(d => d.lineaNegocio).filter(Boolean))].sort();
+            const estados = [...new Set(rawData.map(d => d.estadoMPB).filter(Boolean))].sort();
+
+            buildMultiselectMenu('dropdownAnio', anios, 'Anio');
+            buildMultiselectMenu('dropdownMes', meses, 'Mes', true);
+            buildMultiselectMenu('dropdownZona', zonas, 'Zona');
+            buildMultiselectMenu('dropdownTipo', tipos, 'Tipo');
+            buildMultiselectMenu('dropdownLinea', lineas, 'Linea');
+            buildMultiselectMenu('dropdownEstado', estados, 'Estado');
+        }
+
+        function buildMultiselectMenu(containerId, items, key, isMonthFormat = false) {
+            const container = document.getElementById(containerId);
+            let html = `
+                <div class="flex items-center justify-between pb-1 mb-1 border-b border-slate-100 px-1">
+                    <button type="button" onclick="selectAllMulti('${key}', true)" class="text-[10px] font-bold text-emerald-700 hover:underline">Todos</button>
+                    <button type="button" onclick="selectAllMulti('${key}', false)" class="text-[10px] font-bold text-slate-400 hover:underline">Ninguno</button>
+                </div>
+            `;
+            items.forEach((it) => {
+                const labelText = isMonthFormat ? formatMonthName(it) : it;
+                html += `
+                    <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer text-xs select-none">
+                        <input type="checkbox" value="${it}" class="chk-${key} rounded text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5" onchange="applyFilters()">
+                        <span class="text-slate-700 font-medium truncate">${labelText}</span>
+                    </label>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function toggleDropdown(event, id) {
+            event.stopPropagation();
+            const elem = document.getElementById(id);
+            const isHidden = elem.classList.contains('hidden');
+            closeAllDropdowns();
+            if (isHidden) elem.classList.remove('hidden');
+        }
+
+        function closeAllDropdowns() {
+            document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.add('hidden'));
+        }
+
+        function selectAllMulti(key, checked) {
+            document.querySelectorAll(`.chk-${key}`).forEach(chk => chk.checked = checked);
+            applyFilters();
+        }
+
+        function getSelectedValues(key) {
+            return Array.from(document.querySelectorAll(`.chk-${key}:checked`)).map(c => c.value);
+        }
+
+        function updateDropdownLabels() {
+            updateSingleLabel('Anio');
+            updateSingleLabel('Mes', true);
+            updateSingleLabel('Zona');
+            updateSingleLabel('Tipo');
+            updateSingleLabel('Linea');
+            updateSingleLabel('Estado');
+        }
+
+        function updateSingleLabel(key, isMonthFormat = false) {
+            const selected = getSelectedValues(key);
+            const total = document.querySelectorAll(`.chk-${key}`).length;
+            const labelElem = document.getElementById(`label${key}`);
+
+            if (selected.length === 0 || selected.length === total) {
+                labelElem.innerText = `Todos (${total})`;
+            } else if (selected.length === 1) {
+                labelElem.innerText = isMonthFormat ? formatMonthName(selected[0]) : selected[0];
+            } else {
+                labelElem.innerText = `${selected.length} selec.`;
+            }
+        }
+
+        function resetFilters() {
+            ['Anio', 'Mes', 'Zona', 'Tipo', 'Linea', 'Estado'].forEach(key => {
+                document.querySelectorAll(`.chk-${key}`).forEach(chk => chk.checked = false);
+            });
+            document.getElementById('searchInput').value = "";
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const selAnios = getSelectedValues('Anio');
+            const selMeses = getSelectedValues('Mes');
+            const selZonas = getSelectedValues('Zona');
+            const selTipos = getSelectedValues('Tipo');
+            const selLineas = getSelectedValues('Linea');
+            const selEstados = getSelectedValues('Estado');
+
+            updateDropdownLabels();
+
+            filteredData = rawData.filter(d => {
+                const anioProg = d.mesProg ? d.mesProg.substring(0, 4) : '';
+                const normTipo = normalizeTipo(d.tipoCentral);
+
+                if (selAnios.length > 0 && !selAnios.includes(anioProg)) return false;
+                if (selMeses.length > 0 && !selMeses.includes(d.mesProg)) return false;
+                if (selZonas.length > 0 && !selZonas.includes(d.zona)) return false;
+                if (selTipos.length > 0 && !selTipos.includes(normTipo)) return false;
+                if (selLineas.length > 0 && !selLineas.includes(d.lineaNegocio)) return false;
+                if (selEstados.length > 0 && !selEstados.includes(d.estadoMPB)) return false;
+                return true;
+            });
+
+            updateKPIs();
+            updateReprogCompareTable();
+            renderChartProgVsEjec();
+            renderChartEstados();
+            renderChartTipo();
+            renderChartZona();
+            renderTable();
+        }
+
+        function esEjecutadaReal(d) {
+            if (d.levantamiento === true) return true;
+            
+            const st = (d.estadoMPB || '').toLowerCase();
+            const mesEj = (d.mesEjecutado || '').toLowerCase();
+
+            if (mesEj.includes('pendiente') || st.includes('programado') || st.includes('sin acceso')) {
+                return false;
+            }
+
+            if (st.includes('finalizado') || st.includes('aprobado') || st.includes('ejecutado')) {
+                return true;
+            }
+
+            if (mesEj !== '' && mesEj !== 'nan' && mesEj.includes('202')) {
+                return true;
+            }
+
+            return false;
+        }
+
+        function tieneReprogramacion(d) {
+            if (d.fechaReprogramada && d.fechaReprogramada !== '' && d.fechaReprogramada !== '-' && !d.fechaReprogramada.toLowerCase().includes('pendiente')) return true;
+            return d.estadoMPB === 'Reprogramado';
+        }
+
+        function getYearMonthStr(str) {
+            if (!str) return null;
+            if (str.length >= 7 && str.includes('-')) return str.substring(0, 7);
+            return null;
+        }
+
+        function updateKPIs() {
+            const total = filteredData.length;
+            const executed = filteredData.filter(d => esEjecutadaReal(d)).length;
+
+            const list2026 = filteredData.filter(d => d.mesProg && d.mesProg.startsWith('2026'));
+            const total2026 = list2026.length;
+            const exec2026 = list2026.filter(d => esEjecutadaReal(d)).length;
+
+            const list2027 = filteredData.filter(d => d.mesProg && d.mesProg.startsWith('2027'));
+            const total2027 = list2027.length;
+            const exec2027 = list2027.filter(d => esEjecutadaReal(d)).length;
+
+            document.getElementById('kpiTotalHeader').innerText = total;
+            document.getElementById('kpiTotal').innerText = total;
+            document.getElementById('kpiTotalSub').innerText = `Avance: ${executed} / ${total}`;
+            const pctTotal = total ? Math.round((executed / total) * 100) : 0;
+            document.getElementById('kpiTotalPct').innerText = `${pctTotal}%`;
+            document.getElementById('kpiTotalBar').style.width = `${pctTotal}%`;
+
+            document.getElementById('kpi2026').innerText = total2026;
+            document.getElementById('kpi2026Sub').innerText = `Avance: ${exec2026} / ${total2026}`;
+            const pct2026 = total2026 ? Math.round((exec2026 / total2026) * 100) : 0;
+            document.getElementById('kpi2026Pct').innerText = `${pct2026}%`;
+            document.getElementById('kpi2026Bar').style.width = `${pct2026}%`;
+
+            document.getElementById('kpi2027').innerText = total2027;
+            document.getElementById('kpi2027Sub').innerText = `Avance: ${exec2027} / ${total2027}`;
+            const pct2027 = total2027 ? Math.round((exec2027 / total2027) * 100) : 0;
+            document.getElementById('kpi2027Pct').innerText = `${pct2027}%`;
+            document.getElementById('kpi2027Bar').style.width = `${pct2027}%`;
+        }
+
+        function updateReprogCompareTable() {
+            let noEjecOrig = Array(10).fill(0);
+            let reprogDest = Array(10).fill(0);
+            let ejecReal = Array(10).fill(0);
+
+            filteredData.forEach(d => {
+                const idxProg = mesesOrden.indexOf(d.mesProg);
+                const tieneReprog = tieneReprogramacion(d);
+                const fueEjec = esEjecutadaReal(d);
+
+                if (tieneReprog || !fueEjec) {
+                    if (idxProg !== -1) noEjecOrig[idxProg]++;
+                }
+
+                if (tieneReprog) {
+                    const ymReprog = getYearMonthStr(d.fechaReprogramada);
+                    const idxReprog = ymReprog ? mesesOrden.indexOf(ymReprog) : -1;
+
+                    if (idxReprog !== -1) reprogDest[idxReprog]++;
+                    else if (idxProg !== -1) reprogDest[idxProg]++;
+
+                    if (fueEjec) {
+                        const ymEjec = getYearMonthStr(d.mesEjecutado) || ymReprog;
+                        const idxEjec = ymEjec ? mesesOrden.indexOf(ymEjec) : -1;
+
+                        if (idxEjec !== -1) ejecReal[idxEjec]++;
+                        else if (idxReprog !== -1) ejecReal[idxReprog]++;
+                    }
+                }
+            });
+
+            for (let i = 0; i < 10; i++) {
+                document.getElementById(`cell-noejec-${i}`).innerText = noEjecOrig[i];
+                document.getElementById(`cell-rep-${i}`).innerText = reprogDest[i];
+                document.getElementById(`cell-exe-${i}`).innerText = ejecReal[i];
+            }
+
+            document.getElementById('cell-noejec-total').innerText = noEjecOrig.reduce((a, b) => a + b, 0);
+            document.getElementById('cell-rep-total').innerText = reprogDest.reduce((a, b) => a + b, 0);
+            document.getElementById('cell-exe-total').innerText = ejecReal.reduce((a, b) => a + b, 0);
+        }
+
+        function renderChartProgVsEjec() {
+            const prog = Array(mesesOrden.length).fill(0);
+            const reprog = Array(mesesOrden.length).fill(0);
+            const ejecProg = Array(mesesOrden.length).fill(0);
+            const ejecReprog = Array(mesesOrden.length).fill(0);
+
+            filteredData.forEach(d => {
+                const idxProg = mesesOrden.indexOf(d.mesProg);
+                const tieneReprog = tieneReprogramacion(d);
+                const fueEjec = esEjecutadaReal(d);
+
+                if (tieneReprog) {
+                    if (fueEjec) {
+                        const ymEjec = getYearMonthStr(d.mesEjecutado) || getYearMonthStr(d.fechaReprogramada);
+                        const idxEjec = ymEjec ? mesesOrden.indexOf(ymEjec) : idxProg;
+                        if (idxEjec !== -1) ejecReprog[idxEjec]++;
+                    } else {
+                        const ymReprog = getYearMonthStr(d.fechaReprogramada);
+                        const idxReprog = ymReprog ? mesesOrden.indexOf(ymReprog) : idxProg;
+                        if (idxReprog !== -1) reprog[idxReprog]++;
+                    }
+                } else if (fueEjec) {
+                    if (idxProg !== -1) ejecProg[idxProg]++;
+                } else {
+                    if (idxProg !== -1) prog[idxProg]++;
+                }
+            });
+
+            if (chartProgVsEjec) chartProgVsEjec.destroy();
+
+            chartProgVsEjec = new Chart(document.getElementById('chartProgVsEjec'), {
+                type: 'bar',
+                data: {
+                    labels: mesesNombres,
+                    datasets: [
+                        { label: 'Prog. Pendiente', data: prog, backgroundColor: '#60a5fa' },
+                        { label: 'Reprog. Pendiente', data: reprog, backgroundColor: '#fbbf24' },
+                        { label: 'Ejecutadas Prog.', data: ejecProg, backgroundColor: '#34d399' },
+                        { label: 'Ejecutadas Reprog.', data: ejecReprog, backgroundColor: '#059669' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } }, datalabels: datalabelsCommon }
+                }
+            });
+        }
+
+        function renderChartEstados() {
+            const estados = [...new Set(filteredData.map(d => d.estadoMPB).filter(Boolean))];
+            const colores = ['#0284c7', '#10b981', '#8b5cf6', '#f59e0b', '#64748b', '#ec4899', '#ef4444', '#14b8a6'];
+
+            const datasets = estados.map((st, i) => {
+                const counts = mesesOrden.map(m => filteredData.filter(d => d.mesProg === m && d.estadoMPB === st).length);
+                return { label: st, data: counts, backgroundColor: colores[i % colores.length] };
+            });
+
+            if (chartEstados) chartEstados.destroy();
+
+            chartEstados = new Chart(document.getElementById('chartEstados'), {
+                type: 'bar',
+                data: { labels: mesesNombres, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10, weight: 'bold' } } }, datalabels: datalabelsCommon },
+                    scales: { x: { stacked: false, ticks: { font: { weight: 'bold' } } }, y: { stacked: false, beginAtZero: true } }
+                }
+            });
+        }
+
+        function renderChartTipo() {
+            const viewType = document.getElementById('selectChartType') ? document.getElementById('selectChartType').value : 'STACKED';
+
+            if (chartTipo) chartTipo.destroy();
+
+            if (viewType === 'DOUGHNUT') {
+                const counts = {};
+                filteredData.forEach(d => {
+                    const t = normalizeTipo(d.tipoCentral);
+                    counts[t] = (counts[t] || 0) + 1;
+                });
+
+                chartTipo = new Chart(document.getElementById('chartTipo'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(counts),
+                        datasets: [{
+                            data: Object.values(counts),
+                            backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#f59e0b', '#06b6d4', '#64748b']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
+                            datalabels: {
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 10 },
+                                textAlign: 'center',
+                                formatter: (v, ctx) => {
+                                    if (v <= 0) return '';
+                                    const label = ctx.chart.data.labels[ctx.dataIndex];
+                                    return `${v}\n${label}`;
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                const lineas = [...new Set(filteredData.map(d => d.lineaNegocio).filter(Boolean))].sort();
+                const tipos = [...new Set(filteredData.map(d => normalizeTipo(d.tipoCentral)).filter(Boolean))].sort();
+
+                const colorMap = {
+                    'Solar': '#10b981',
+                    'Hidro': '#3b82f6',
+                    'Eólico': '#8b5cf6',
+                    'Térmica': '#ef4444',
+                    'Oficina': '#f59e0b',
+                    'Control Room': '#06b6d4',
+                    'Data Center': '#64748b',
+                    'Geotérmica': '#ec4899'
+                };
+
+                const datasets = tipos.map((t, i) => {
+                    const data = lineas.map(l => {
+                        return filteredData.filter(d => d.lineaNegocio === l && normalizeTipo(d.tipoCentral) === t).length;
+                    });
+
+                    return {
+                        label: t,
+                        data: data,
+                        backgroundColor: colorMap[t] || ['#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#f59e0b'][i % 5]
+                    };
+                });
+
+                const labelsFormatted = lineas.map(l => {
+                    if (l.includes('GENERACION')) return 'Enel Generación';
+                    if (l.includes('GREEN POWER')) return 'Enel Green Power';
+                    if (l.includes('DISTRIBUCION')) return 'Enel Distribución';
+                    if (l.includes('CHILE')) return 'Enel Chile';
+                    return l;
+                });
+
+                chartTipo = new Chart(document.getElementById('chartTipo'), {
+                    type: 'bar',
+                    data: {
+                        labels: labelsFormatted,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
+                            datalabels: {
+                                anchor: 'center',
+                                align: 'center',
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 10 },
+                                textAlign: 'center',
+                                formatter: (v, ctx) => {
+                                    if (v <= 0) return '';
+                                    const tipoNombre = ctx.dataset.label;
+                                    return `${v}\n${tipoNombre}`;
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { stacked: true, ticks: { font: { size: 11, weight: 'bold' } } },
+                            y: { stacked: true, beginAtZero: true, ticks: { font: { weight: 'bold' } } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function renderChartZona() {
+            const counts = {};
+            filteredData.forEach(d => {
+                const z = d.zona || 'Sin Zona';
+                counts[z] = (counts[z] || 0) + 1;
+            });
+
+            if (chartZona) chartZona.destroy();
+
+            chartZona = new Chart(document.getElementById('chartZona'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        label: 'N° Centrales',
+                        data: Object.values(counts),
+                        backgroundColor: '#1e5631',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, datalabels: datalabelsCommon },
+                    scales: { x: { ticks: { font: { weight: 'bold', size: 10 } } }, y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            filteredData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors border-b border-slate-100';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-semibold text-slate-800">${row.central}</td>
+                    <td class="py-3 px-4 text-slate-600 font-bold">${normalizeTipo(row.tipoCentral)}</td>
+                    <td class="py-3 px-4 text-slate-600">${row.zona}</td>
+                    <td class="py-3 px-4 text-slate-500">${row.lineaNegocio}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${getStatusStyle(row.estadoMPB)}">
+                            ${row.estadoMPB}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-center text-slate-500 font-medium">${row.fechaProgOrig || '-'}</td>
+                    <td class="py-3 px-4 text-center font-bold text-emerald-800">${row.fechaReprogramada || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function getStatusStyle(st) {
+            switch(st) {
+                case 'MPB Aprobado por Enel': return 'bg-purple-100 text-purple-800 border border-purple-200';
+                case 'Finalizado con informe': return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+                case 'MPB Ejecutado Pendiente HA': return 'bg-amber-100 text-amber-800 border border-amber-200';
+                case 'Ejecutado sin informe': return 'bg-blue-100 text-blue-800 border border-blue-200';
+                case 'Reprogramado': return 'bg-pink-100 text-pink-800 border border-pink-200';
+                case 'Sin Acceso Enel': return 'bg-red-100 text-red-800 border border-red-200';
+                case 'Programado': return 'bg-slate-100 text-slate-700 border border-slate-200';
+                default: return 'bg-slate-100 text-slate-700 border border-slate-200';
+            }
+        }
+
+        function filterTableText() {
+            const input = document.getElementById('searchInput').value.toUpperCase();
+            const rows = document.getElementById('tableBody').getElementsByTagName('tr');
+            for (let r of rows) {
+                const txt = r.textContent || r.innerText;
+                r.style.display = txt.toUpperCase().includes(input) ? '' : 'none';
+            }
+        }
+
+        function exportToCSV() {
+            if (!filteredData.length) return alert('No hay datos para exportar');
+            let csvContent = "data:text/csv;charset=utf-8,Central,Tipo,Zona,Linea Negocio,Estado,Fecha Prog,Fecha Reprog\n";
+            filteredData.forEach(d => {
+                csvContent += `"${d.central}","${normalizeTipo(d.tipoCentral)}","${d.zona}","${d.lineaNegocio}","${d.estadoMPB}","${d.fechaProgOrig}","${d.fechaReprogramada}"\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "Dashboard_MPB_Enel.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
